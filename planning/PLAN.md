@@ -1,5 +1,22 @@
 # FinAlly — AI Trading Workstation
 
+## Table of Contents
+
+1. [Vision](#1-vision)
+2. [User Experience](#2-user-experience)
+3. [Architecture Overview](#3-architecture-overview)
+4. [Directory Structure](#4-directory-structure)
+5. [Environment Variables](#5-environment-variables)
+6. [Market Data](#6-market-data)
+7. [Database](#7-database)
+8. [API Endpoints](#8-api-endpoints)
+9. [LLM Integration](#9-llm-integration)
+10. [Frontend Design](#10-frontend-design)
+11. [Docker & Deployment](#11-docker--deployment)
+12. [Testing Strategy](#12-testing-strategy)
+
+---
+
 ## Project Specification
 
 ## 1. Vision
@@ -108,13 +125,13 @@ finally/
 
 ### Key Boundaries
 
-- **`frontend/`** is a self-contained Next.js project. It knows nothing about Python. It talks to the backend via `/api/*` endpoints and `/api/stream/*` SSE endpoints. Internal structure is up to the Frontend Engineer agent.
-- **`backend/`** is a self-contained uv project with its own `pyproject.toml`. It owns all server logic including database initialization, schema, seed data, API routes, SSE streaming, market data, and LLM integration. Internal structure is up to the Backend/Market Data agents.
-- **`backend/db/`** contains schema SQL definitions and seed logic. The backend lazily initializes the database on first request — creating tables and seeding default data if the SQLite file doesn't exist or is empty.
-- **`db/`** at the top level is the runtime volume mount point. The SQLite file (`db/finally.db`) is created here by the backend and persists across container restarts via Docker volume.
-- **`planning/`** contains project-wide documentation, including this plan. All agents reference files here as the shared contract.
-- **`test/`** contains Playwright E2E tests and supporting infrastructure (e.g., `docker-compose.test.yml`). Unit tests live within `frontend/` and `backend/` respectively, following each framework's conventions.
-- **`scripts/`** contains start/stop scripts that wrap Docker commands.
+- **`frontend/`** — Self-contained Next.js project; talks to backend via `/api/*` and `/api/stream/*`. Internal structure up to Frontend Engineer agent.
+- **`backend/`** — Self-contained uv project; owns all server logic (routes, SSE, market data, LLM, database). Internal structure up to Backend/Market Data agents.
+- **`backend/db/`** — Schema SQL and seed logic. Backend lazily initializes on first request.
+- **`db/`** — Runtime volume mount point. SQLite file (`finally.db`) persists across restarts.
+- **`planning/`** — Project-wide documentation; the shared contract for all agents.
+- **`test/`** — Playwright E2E tests and `docker-compose.test.yml`. Unit tests live in `frontend/` and `backend/`.
+- **`scripts/`** — Start/stop scripts wrapping Docker commands.
 
 ---
 
@@ -159,9 +176,7 @@ Both the simulator and the Massive client implement the same abstract interface.
 ### Massive API (Optional)
 
 - REST API polling (not WebSocket) — simpler, works on all tiers
-- Polls for the union of all watched tickers on a configurable interval
-- Free tier (5 calls/min): poll every 15 seconds
-- Paid tiers: poll every 2-15 seconds depending on tier
+- Polls for the union of all watched tickers on a configurable interval (tier-dependent via env var)
 - Parses REST response into the same format as the simulator
 
 ### Shared Price Cache
@@ -193,23 +208,22 @@ The backend checks for the SQLite database on startup (or first request). If the
 
 ### Schema
 
-All tables include a `user_id` column defaulting to `"default"`. This is hardcoded for now (single-user) but enables future multi-user support without schema migration.
+**Note:** All tables include a `user_id` column defaulting to `"default"` for future multi-user support without migration. Currently hardcoded to single-user mode.
 
 **users_profile** — User state (cash balance)
-- `id` TEXT PRIMARY KEY (default: `"default"`)
+- `id` TEXT PRIMARY KEY (`"default"`)
 - `cash_balance` REAL (default: `10000.0`)
 - `created_at` TEXT (ISO timestamp)
+- `user_id` TEXT
 
 **watchlist** — Tickers the user is watching
 - `id` TEXT PRIMARY KEY (UUID)
-- `user_id` TEXT (default: `"default"`)
 - `ticker` TEXT
 - `added_at` TEXT (ISO timestamp)
 - UNIQUE constraint on `(user_id, ticker)`
 
 **positions** — Current holdings (one row per ticker per user)
 - `id` TEXT PRIMARY KEY (UUID)
-- `user_id` TEXT (default: `"default"`)
 - `ticker` TEXT
 - `quantity` REAL (fractional shares supported)
 - `avg_cost` REAL
@@ -218,7 +232,6 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 
 **trades** — Trade history (append-only log)
 - `id` TEXT PRIMARY KEY (UUID)
-- `user_id` TEXT (default: `"default"`)
 - `ticker` TEXT
 - `side` TEXT (`"buy"` or `"sell"`)
 - `quantity` REAL (fractional shares supported)
@@ -227,13 +240,11 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 
 **portfolio_snapshots** — Portfolio value over time (for P&L chart). Recorded every 30 seconds by a background task, and immediately after each trade execution.
 - `id` TEXT PRIMARY KEY (UUID)
-- `user_id` TEXT (default: `"default"`)
 - `total_value` REAL
 - `recorded_at` TEXT (ISO timestamp)
 
 **chat_messages** — Conversation history with LLM
 - `id` TEXT PRIMARY KEY (UUID)
-- `user_id` TEXT (default: `"default"`)
 - `role` TEXT (`"user"` or `"assistant"`)
 - `content` TEXT
 - `actions` TEXT (JSON — trades executed, watchlist changes made; null for user messages)
@@ -251,7 +262,7 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 ### Market Data
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/stream/prices` | SSE stream of live price updates |
+| GET | `/api/stream/prices` | SSE stream of live price updates (see [Section 6: Market Data](#6-market-data)) |
 
 ### Portfolio
 | Method | Path | Description |
@@ -270,12 +281,31 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 ### Chat
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/chat` | Send a message, receive complete JSON response (message + executed actions) |
+| POST | `/api/chat` | Send a message, receive complete JSON response (see [Section 9: LLM Integration](#9-llm-integration)) |
 
 ### System
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/health` | Health check (for Docker/deployment) |
+
+### Error Response Format
+
+All error responses return JSON with the following format:
+
+```json
+{
+  "error": "Human-readable error message",
+  "code": "ERROR_CODE",
+  "details": { "key": "value" }  // optional
+}
+```
+
+**Common HTTP Status Codes**:
+- `400 Bad Request` — Invalid input, malformed request
+- `402 Payment Required` — Insufficient cash to buy
+- `409 Conflict` — Insufficient shares to sell, ticker not found in watchlist
+- `422 Unprocessable Entity` — Trade validation failed
+- `500 Internal Server Error` — Server error
 
 ---
 
@@ -296,7 +326,9 @@ When the user sends a chat message, the backend:
 5. Parses the complete structured JSON response
 6. Auto-executes any trades or watchlist changes specified in the response
 7. Stores the message and executed actions in `chat_messages`
-8. Returns the complete JSON response to the frontend (no token-by-token streaming — Cerebras inference is fast enough that a loading indicator is sufficient)
+8. Returns the complete JSON response to the frontend (no token-by-token streaming)
+
+**LLM Response SLA**: Responses should complete in under 5 seconds 99% of the time for a smooth UX with a loading indicator.
 
 ### Structured Output Schema
 
@@ -487,22 +519,15 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
    - EventSource has built-in retry with exponential backoff, but the specifics (max retries, backoff duration) are browser-default. Should these be configurable or documented?
    ANSWER: pLease be configurable
 
-### Opportunities to Simplify
+### Simplifications Implemented ✓
 
-1. **Reduce Database Schema Duplication**
-   - All 6 tables repeat `user_id TEXT (default: "default")`. Add a single note at the top of Section 7 clarifying: "All tables include a `user_id` column for future multi-user support; currently hardcoded to 'default'." Remove the repetition from each table.
-
-2. **Consolidate Polling Interval Details**
-   - Section 6 lists specific polling intervals (15s free tier, 2-15s paid). This level of detail is valuable but could live in a separate implementation doc. The PLAN could simplify to: "Massive API polling interval is configured per tier via environment variable."
-
-3. **Shorten Directory Structure Section**
-   - The explanations in "Key Boundaries" (Section 4) are helpful context for agents, but could be tightened. For example, the 3-sentence explanation of `frontend/` could be: "Self-contained Next.js project; talks to backend via `/api/*` and `/api/stream/*`. Internal structure up to Frontend Engineer agent."
-
-4. **Clarify Error Handling Patterns**
-   - Add a brief section (or subsection under API Endpoints) documenting standard error response format: "All error responses return JSON with fields: `{error: string, code: string, details?: object}`" — this prevents agents from guessing.
-
-5. **Specify LLM Response Timeout**
-   - Section 9 says Cerebras is "fast enough" for a loading indicator. What is "fast enough"? Define an SLA (e.g., "LLM responses should complete in under 5 seconds 99% of the time for a smooth UX").
+1. **Reduce Database Schema Duplication** — Consolidated `user_id` repetition with a single note at the top of Section 7
+2. **Consolidate Polling Interval Details** — Simplified Massive API description; polling intervals now configurable via env var
+3. **Shorten Directory Structure Section** — Tightened "Key Boundaries" explanations to one line each
+4. **Clarify Error Handling Patterns** — Added standardized error response format under API Endpoints
+5. **Specify LLM Response Timeout** — Defined 5-second SLA for LLM responses in Section 9
+6. **Table of Contents** — Added at document top for easy navigation
+7. **Cross-Section Links** — Added references from API endpoints to detailed implementation sections
 
 ### Strengths of This Plan
 
