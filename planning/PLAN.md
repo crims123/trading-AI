@@ -454,3 +454,65 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 - Portfolio visualization: heatmap renders with correct colors, P&L chart has data points
 - AI chat (mocked): send a message, receive a response, trade execution appears inline
 - SSE resilience: disconnect and verify reconnection
+
+---
+
+## 13. Review Notes & Clarifications
+
+### Questions & Clarifications Needed
+
+1. **Environment Variable Requirements (Section 5)**
+   - `OPENROUTER_API_KEY` is marked "Required" but there's no fallback behavior defined. Should the frontend gracefully disable chat if the key is missing, or should the app fail to start?
+   - Should `.env.example` be included in the repo with placeholder values for onboarding?
+   ANSWER: YES
+
+2. **SSE Streaming Efficiency (Section 6)**
+   - The plan states SSE pushes "for all tickers known to the system at a regular cadence (~500ms)". In a single-user model this matches the watchlist, but what happens if the watchlist is empty? Does the stream still push every 500ms with no data?
+   - Should we optimize to only push tickers that have price changes, or is the fixed cadence intentional for UX consistency?
+
+3. **Database Race Conditions (Section 7)**
+   - "Lazy initialization on first request" — what happens if two concurrent requests hit the database init simultaneously? Should we use a file lock or transaction to prevent double-initialization?
+   ANSWER: Use transaction
+
+4. **Trade Failure Handling (Section 8 & 9)**
+   - When a trade fails validation (insufficient cash/shares), what HTTP status code should `/api/portfolio/trade` return? (400 Bad Request, 422 Unprocessable Entity, 402 Payment Required, or custom error?)
+   ANSWER: Add a custom error for insufficient cash
+   - When the LLM auto-executes a trade and it fails, the "error is included in the chat response" — but does the LLM know the trade failed, or does it see a successful response? Clarify the feedback loop.
+
+5. **Connection Status Indicator (Section 10)**
+   - The frontend shows a connection status dot (green/yellow/red), but the API spec doesn't define an endpoint for connection state. Should this be inferred from SSE connection state, or should there be a `/api/health` endpoint that the frontend polls?
+   ANSWER: add a health api
+
+6. **SSE Reconnection Strategy (Section 6)**
+   - EventSource has built-in retry with exponential backoff, but the specifics (max retries, backoff duration) are browser-default. Should these be configurable or documented?
+   ANSWER: pLease be configurable
+
+### Opportunities to Simplify
+
+1. **Reduce Database Schema Duplication**
+   - All 6 tables repeat `user_id TEXT (default: "default")`. Add a single note at the top of Section 7 clarifying: "All tables include a `user_id` column for future multi-user support; currently hardcoded to 'default'." Remove the repetition from each table.
+
+2. **Consolidate Polling Interval Details**
+   - Section 6 lists specific polling intervals (15s free tier, 2-15s paid). This level of detail is valuable but could live in a separate implementation doc. The PLAN could simplify to: "Massive API polling interval is configured per tier via environment variable."
+
+3. **Shorten Directory Structure Section**
+   - The explanations in "Key Boundaries" (Section 4) are helpful context for agents, but could be tightened. For example, the 3-sentence explanation of `frontend/` could be: "Self-contained Next.js project; talks to backend via `/api/*` and `/api/stream/*`. Internal structure up to Frontend Engineer agent."
+
+4. **Clarify Error Handling Patterns**
+   - Add a brief section (or subsection under API Endpoints) documenting standard error response format: "All error responses return JSON with fields: `{error: string, code: string, details?: object}`" — this prevents agents from guessing.
+
+5. **Specify LLM Response Timeout**
+   - Section 9 says Cerebras is "fast enough" for a loading indicator. What is "fast enough"? Define an SLA (e.g., "LLM responses should complete in under 5 seconds 99% of the time for a smooth UX").
+
+### Strengths of This Plan
+
+- **Excellent detail and clarity** — agents have concrete specifications, not vague requirements
+- **Clear architectural boundaries** — frontend/backend/database separation is crisp
+- **Thoughtful tech choices** — the "Why These Choices" table justifies each decision
+- **Single-user focus** — keeps scope tight while designing for future multi-user
+- **Well-formatted** — tables, code blocks, and clear section numbering make it easy to navigate
+
+### Minor Formatting Suggestions
+
+- Add a Table of Contents at the top for quick navigation (sections 1–12)
+- Consider linking from API endpoint descriptions (Section 8) to the detailed implementation notes in other sections (e.g., `/api/stream/prices` → Section 6)
