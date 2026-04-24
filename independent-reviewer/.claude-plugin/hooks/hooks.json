@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "codex exec Carry out a review of all changes since last commit and write results to the end of a file named planning/REVIEW.md"
+      }
+    ]
+  }
+}

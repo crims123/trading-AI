@@ -1,0 +1,10 @@
+{
+  "id": "independent-reviewer",
+  "name": "independent-reviewer",
+  "description": "A plugin that provides independent reviews and feedback on various topics.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Cristian Pinto"
+  },
+  "hooks": "./hooks/hooks.json"
+}

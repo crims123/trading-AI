@@ -56,6 +56,7 @@ The user runs a single Docker command (or a provided start script). A browser op
 - **Responsive but desktop-first**: optimized for wide screens, functional on tablet
 
 ### Color Scheme
+
 - Accent Yellow: `#ecad0a`
 - Blue Primary: `#209dd7`
 - Purple Secondary: `#753991` (submit buttons)
@@ -88,14 +89,14 @@ The user runs a single Docker command (or a provided start script). A browser op
 
 ### Why These Choices
 
-| Decision | Rationale |
-|---|---|
-| SSE over WebSockets | One-way push is all we need; simpler, no bidirectional complexity, universal browser support |
-| Static Next.js export | Single origin, no CORS issues, one port, one container, simple deployment |
-| SQLite over Postgres | No auth = no multi-user = no need for a database server; self-contained, zero config |
-| Single Docker container | Students run one command; no docker-compose for production, no service orchestration |
-| uv for Python | Fast, modern Python project management; reproducible lockfile; what students should learn |
-| Market orders only | Eliminates order book, limit order logic, partial fills — dramatically simpler portfolio math |
+| Decision                | Rationale                                                                                     |
+| ----------------------- | --------------------------------------------------------------------------------------------- |
+| SSE over WebSockets     | One-way push is all we need; simpler, no bidirectional complexity, universal browser support  |
+| Static Next.js export   | Single origin, no CORS issues, one port, one container, simple deployment                     |
+| SQLite over Postgres    | No auth = no multi-user = no need for a database server; self-contained, zero config          |
+| Single Docker container | Students run one command; no docker-compose for production, no service orchestration          |
+| uv for Python           | Fast, modern Python project management; reproducible lockfile; what students should learn     |
+| Market orders only      | Eliminates order book, limit order logic, partial fills — dramatically simpler portfolio math |
 
 ---
 
@@ -211,18 +212,21 @@ The backend checks for the SQLite database on startup (or first request). If the
 **Note:** All tables include a `user_id` column defaulting to `"default"` for future multi-user support without migration. Currently hardcoded to single-user mode.
 
 **users_profile** — User state (cash balance)
+
 - `id` TEXT PRIMARY KEY (`"default"`)
 - `cash_balance` REAL (default: `10000.0`)
 - `created_at` TEXT (ISO timestamp)
 - `user_id` TEXT
 
 **watchlist** — Tickers the user is watching
+
 - `id` TEXT PRIMARY KEY (UUID)
 - `ticker` TEXT
 - `added_at` TEXT (ISO timestamp)
 - UNIQUE constraint on `(user_id, ticker)`
 
 **positions** — Current holdings (one row per ticker per user)
+
 - `id` TEXT PRIMARY KEY (UUID)
 - `ticker` TEXT
 - `quantity` REAL (fractional shares supported)
@@ -231,6 +235,7 @@ The backend checks for the SQLite database on startup (or first request). If the
 - UNIQUE constraint on `(user_id, ticker)`
 
 **trades** — Trade history (append-only log)
+
 - `id` TEXT PRIMARY KEY (UUID)
 - `ticker` TEXT
 - `side` TEXT (`"buy"` or `"sell"`)
@@ -239,11 +244,13 @@ The backend checks for the SQLite database on startup (or first request). If the
 - `executed_at` TEXT (ISO timestamp)
 
 **portfolio_snapshots** — Portfolio value over time (for P&L chart). Recorded every 30 seconds by a background task, and immediately after each trade execution.
+
 - `id` TEXT PRIMARY KEY (UUID)
 - `total_value` REAL
 - `recorded_at` TEXT (ISO timestamp)
 
 **chat_messages** — Conversation history with LLM
+
 - `id` TEXT PRIMARY KEY (UUID)
 - `role` TEXT (`"user"` or `"assistant"`)
 - `content` TEXT
@@ -260,33 +267,38 @@ The backend checks for the SQLite database on startup (or first request). If the
 ## 8. API Endpoints
 
 ### Market Data
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/stream/prices` | SSE stream of live price updates (see [Section 6: Market Data](#6-market-data)) |
+
+| Method | Path                 | Description                                                                     |
+| ------ | -------------------- | ------------------------------------------------------------------------------- |
+| GET    | `/api/stream/prices` | SSE stream of live price updates (see [Section 6: Market Data](#6-market-data)) |
 
 ### Portfolio
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/portfolio` | Current positions, cash balance, total value, unrealized P&L |
-| POST | `/api/portfolio/trade` | Execute a trade: `{ticker, quantity, side}` |
-| GET | `/api/portfolio/history` | Portfolio value snapshots over time (for P&L chart) |
+
+| Method | Path                     | Description                                                  |
+| ------ | ------------------------ | ------------------------------------------------------------ |
+| GET    | `/api/portfolio`         | Current positions, cash balance, total value, unrealized P&L |
+| POST   | `/api/portfolio/trade`   | Execute a trade: `{ticker, quantity, side}`                  |
+| GET    | `/api/portfolio/history` | Portfolio value snapshots over time (for P&L chart)          |
 
 ### Watchlist
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/watchlist` | Current watchlist tickers with latest prices |
-| POST | `/api/watchlist` | Add a ticker: `{ticker}` |
-| DELETE | `/api/watchlist/{ticker}` | Remove a ticker |
+
+| Method | Path                      | Description                                  |
+| ------ | ------------------------- | -------------------------------------------- |
+| GET    | `/api/watchlist`          | Current watchlist tickers with latest prices |
+| POST   | `/api/watchlist`          | Add a ticker: `{ticker}`                     |
+| DELETE | `/api/watchlist/{ticker}` | Remove a ticker                              |
 
 ### Chat
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/chat` | Send a message, receive complete JSON response (see [Section 9: LLM Integration](#9-llm-integration)) |
+
+| Method | Path        | Description                                                                                           |
+| ------ | ----------- | ----------------------------------------------------------------------------------------------------- |
+| POST   | `/api/chat` | Send a message, receive complete JSON response (see [Section 9: LLM Integration](#9-llm-integration)) |
 
 ### System
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/health` | Health check (for Docker/deployment) |
+
+| Method | Path          | Description                          |
+| ------ | ------------- | ------------------------------------ |
+| GET    | `/api/health` | Health check (for Docker/deployment) |
 
 ### Error Response Format
 
@@ -296,11 +308,12 @@ All error responses return JSON with the following format:
 {
   "error": "Human-readable error message",
   "code": "ERROR_CODE",
-  "details": { "key": "value" }  // optional
+  "details": { "key": "value" } // optional
 }
 ```
 
 **Common HTTP Status Codes**:
+
 - `400 Bad Request` — Invalid input, malformed request
 - `402 Payment Required` — Insufficient cash to buy
 - `409 Conflict` — Insufficient shares to sell, ticker not found in watchlist
@@ -337,12 +350,8 @@ The LLM is instructed to respond with JSON matching this schema:
 ```json
 {
   "message": "Your conversational response to the user",
-  "trades": [
-    {"ticker": "AAPL", "side": "buy", "quantity": 10}
-  ],
-  "watchlist_changes": [
-    {"ticker": "PYPL", "action": "add"}
-  ]
+  "trades": [{ "ticker": "AAPL", "side": "buy", "quantity": 10 }],
+  "watchlist_changes": [{ "ticker": "PYPL", "action": "add" }]
 }
 ```
 
@@ -353,6 +362,7 @@ The LLM is instructed to respond with JSON matching this schema:
 ### Auto-Execution
 
 Trades specified by the LLM execute automatically — no confirmation dialog. This is a deliberate design choice:
+
 - It's a simulated environment with fake money, so the stakes are zero
 - It creates an impressive, fluid demo experience
 - It demonstrates agentic AI capabilities — the core theme of the course
@@ -362,6 +372,7 @@ If a trade fails validation (e.g., insufficient cash), the error is included in 
 ### System Prompt Guidance
 
 The LLM should be prompted as "FinAlly, an AI trading assistant" with instructions to:
+
 - Analyze portfolio composition, risk concentration, and P&L
 - Suggest trades with reasoning
 - Execute trades when the user asks or agrees
@@ -372,6 +383,7 @@ The LLM should be prompted as "FinAlly, an AI trading assistant" with instructio
 ### LLM Mock Mode
 
 When `LLM_MOCK=true`, the backend returns deterministic mock responses instead of calling OpenRouter. This enables:
+
 - Fast, free, reproducible E2E tests
 - Development without an API key
 - CI/CD pipelines
@@ -436,12 +448,14 @@ The `db/` directory in the project root maps to `/app/db` in the container. The 
 ### Start/Stop Scripts
 
 **`scripts/start_mac.sh`** (macOS/Linux):
+
 - Builds the Docker image if not already built (or if `--build` flag passed)
 - Runs the container with the volume mount, port mapping, and `.env` file
 - Prints the URL to access the app
 - Optionally opens the browser
 
 **`scripts/stop_mac.sh`** (macOS/Linux):
+
 - Stops and removes the running container
 - Does NOT remove the volume (data persists)
 
@@ -460,12 +474,14 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 ### Unit Tests (within `frontend/` and `backend/`)
 
 **Backend (pytest)**:
+
 - Market data: simulator generates valid prices, GBM math is correct, Massive API response parsing works, both implementations conform to the abstract interface
 - Portfolio: trade execution logic, P&L calculations, edge cases (selling more than owned, buying with insufficient cash, selling at a loss)
 - LLM: structured output parsing handles all valid schemas, graceful handling of malformed responses, trade validation within chat flow
 - API routes: correct status codes, response shapes, error handling
 
 **Frontend (React Testing Library or similar)**:
+
 - Component rendering with mock data
 - Price flash animation triggers correctly on price changes
 - Watchlist CRUD operations
@@ -479,6 +495,7 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 **Environment**: Tests run with `LLM_MOCK=true` by default for speed and determinism.
 
 **Key Scenarios**:
+
 - Fresh start: default watchlist appears, $10k balance shown, prices are streaming
 - Add and remove a ticker from the watchlist
 - Buy shares: cash decreases, position appears, portfolio updates
@@ -496,7 +513,7 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 1. **Environment Variable Requirements (Section 5)**
    - `OPENROUTER_API_KEY` is marked "Required" but there's no fallback behavior defined. Should the frontend gracefully disable chat if the key is missing, or should the app fail to start?
    - Should `.env.example` be included in the repo with placeholder values for onboarding?
-   ANSWER: YES
+     ANSWER: YES
 
 2. **SSE Streaming Efficiency (Section 6)**
    - The plan states SSE pushes "for all tickers known to the system at a regular cadence (~500ms)". In a single-user model this matches the watchlist, but what happens if the watchlist is empty? Does the stream still push every 500ms with no data?
@@ -504,20 +521,20 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 
 3. **Database Race Conditions (Section 7)**
    - "Lazy initialization on first request" — what happens if two concurrent requests hit the database init simultaneously? Should we use a file lock or transaction to prevent double-initialization?
-   ANSWER: Use transaction
+     ANSWER: Use transaction
 
 4. **Trade Failure Handling (Section 8 & 9)**
    - When a trade fails validation (insufficient cash/shares), what HTTP status code should `/api/portfolio/trade` return? (400 Bad Request, 422 Unprocessable Entity, 402 Payment Required, or custom error?)
-   ANSWER: Add a custom error for insufficient cash
+     ANSWER: Add a custom error for insufficient cash
    - When the LLM auto-executes a trade and it fails, the "error is included in the chat response" — but does the LLM know the trade failed, or does it see a successful response? Clarify the feedback loop.
 
 5. **Connection Status Indicator (Section 10)**
    - The frontend shows a connection status dot (green/yellow/red), but the API spec doesn't define an endpoint for connection state. Should this be inferred from SSE connection state, or should there be a `/api/health` endpoint that the frontend polls?
-   ANSWER: add a health api
+     ANSWER: add a health api
 
 6. **SSE Reconnection Strategy (Section 6)**
    - EventSource has built-in retry with exponential backoff, but the specifics (max retries, backoff duration) are browser-default. Should these be configurable or documented?
-   ANSWER: pLease be configurable
+     ANSWER: pLease be configurable
 
 ### Simplifications Implemented ✓
 
