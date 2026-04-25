@@ -1,15 +1,23 @@
 {
-    "hooks": {
-        "Stop": [
-            {
-                "hooks": [
-                    {
-                        "type": "agent",
-                        "prompt": "Carry out a review of all changes since last commit and write results to the end of a file named planning/REVIEW.md",
-                        "timeout": 240
-                    }
-                ]
-            }
-        ]
-    }
+  "plugins": [
+    "/Users/col-ae-014/Documents/AI STUDY/udemy course agents/ai trading/independent-reviewer/.claude-plugin"
+  ],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "type": "command",
+        "prompt": "prettier --write ."
+      }
+    ],
+    "Stop": [
+      {
+        "type": "agent",
+        "prompt": "Carry out a review of all changes since last commit and write results to the end of a file named planning/REVIEW.md",
+        "timeout": 240
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "independent-reviewer@cris-tools": true
+  }
 }
